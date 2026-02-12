@@ -82,6 +82,66 @@ function ExternalLinkIcon() {
   );
 }
 
+function CopyIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function CopyIconButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={copied ? "Copied" : "Copy to clipboard"}
+      aria-label={copied ? "Copied" : "Copy to clipboard"}
+      className="inline-flex items-center justify-center px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-border rounded hover:bg-secondary/50 transition-colors"
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
+  );
+}
+
 function BookOpenIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -146,6 +206,8 @@ const CATEGORY_META: Record<Category, { label: string; icon: React.ReactNode }> 
   patents: { label: "Patents", icon: <ShieldIcon /> },
   companies: { label: "Companies", icon: <BuildingIcon /> },
 };
+
+const CATEGORIES: Category[] = ["research", "news", "patents", "companies"];
 
 /* ─── Skeleton loader ────────────────────────────────────────── */
 function SkeletonCard() {
@@ -332,7 +394,19 @@ function getSourceDomain(url?: string) {
   }
 }
 
-function DetailCard({ r, category }: { r: Result; category: Category }) {
+function DetailCard({
+  r,
+  category,
+  onExpandFromSource,
+  isExpanding,
+  isActiveSource,
+}: {
+  r: Result;
+  category: Category;
+  onExpandFromSource: (source: Result) => void;
+  isExpanding: boolean;
+  isActiveSource: boolean;
+}) {
   const source = getSourceDomain(r.url);
   const date = r.publishedDate
     ? new Date(r.publishedDate).toLocaleDateString("en-US", {
@@ -345,6 +419,7 @@ function DetailCard({ r, category }: { r: Result; category: Category }) {
   const patentOwner = isPatent ? getPatentOwner(r.author) : "";
   const summaryText = r.summary || r.text;
   const takeaway = r.highlights?.[0];
+  const copyText = [r.title, summaryText, takeaway].filter(Boolean).join("\n\n");
 
   return (
     <div className="border border-border rounded-none p-6 hover:bg-secondary/30 transition-colors">
@@ -394,6 +469,67 @@ function DetailCard({ r, category }: { r: Result; category: Category }) {
             {takeaway}
           </p>
         </div>
+      )}
+
+      <div className="pt-3 border-t border-border flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onExpandFromSource(r)}
+          disabled={isExpanding}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-border rounded hover:bg-secondary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isExpanding && isActiveSource ? "Expanding..." : "Expand from this source"}
+        </button>
+        <a
+          href={r.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-border rounded hover:bg-secondary/50 transition-colors"
+        >
+          <ExternalLinkIcon />
+          Open source
+        </a>
+        <CopyIconButton text={copyText} />
+      </div>
+    </div>
+  );
+}
+
+function SimilarSourceCard({ r }: { r: Result }) {
+  const source = getSourceDomain(r.url);
+  const date = r.publishedDate
+    ? new Date(r.publishedDate).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
+  const summaryText = r.summary || r.text;
+  const takeaway = r.highlights?.[0];
+
+  return (
+    <div className="border border-border rounded-none p-4 hover:bg-secondary/30 transition-colors">
+      <a
+        href={r.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-sm font-semibold font-mono leading-snug hover:text-primary transition-colors block mb-1.5"
+      >
+        {r.title}
+      </a>
+      <p className="text-xs text-muted-foreground mb-2">
+        {source}
+        {date && <> &middot; {date}</>}
+      </p>
+      {summaryText && (
+        <p className="text-xs text-foreground/90 leading-relaxed line-clamp-3 mb-2">
+          {summaryText}
+        </p>
+      )}
+      {takeaway && (
+        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+          <span className="font-semibold text-foreground">Takeaway:</span> {takeaway}
+        </p>
       )}
     </div>
   );
@@ -449,6 +585,7 @@ function ResultPanel({
 export default function Home() {
   const [query, setQuery] = useState("");
   const [lastSearchedQuery, setLastSearchedQuery] = useState("");
+  const [lastSearchDeep, setLastSearchDeep] = useState(false);
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -457,8 +594,109 @@ export default function Home() {
   const [detailResults, setDetailResults] = useState<Result[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [similarSource, setSimilarSource] = useState<Result | null>(null);
+  const [similarResults, setSimilarResults] = useState<Result[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [similarError, setSimilarError] = useState("");
+  const [expandingSourceUrl, setExpandingSourceUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const detailCacheRef = useRef<Map<string, Result[]>>(new Map());
+  const detailInFlightRef = useRef<Map<string, Promise<Result[]>>>(new Map());
+  const activeDetailKeyRef = useRef<string | null>(null);
+  const similarCacheRef = useRef<Map<string, Result[]>>(new Map());
+  const similarInFlightRef = useRef<Map<string, Promise<Result[]>>>(new Map());
+  const activeSimilarKeyRef = useRef<string | null>(null);
   const placeholder = useCyclingPlaceholder();
+
+  const getDetailCacheKey = useCallback(
+    (q: string, deep: boolean, category: Category) =>
+      `${deep ? "deep" : "auto"}::${q.trim().toLowerCase()}::${category}`,
+    []
+  );
+
+  const getSimilarCacheKey = useCallback(
+    (q: string, deep: boolean, category: Category, sourceUrl: string) =>
+      `${deep ? "deep" : "auto"}::${q.trim().toLowerCase()}::${category}::${sourceUrl}`,
+    []
+  );
+
+  const fetchDetailResults = useCallback(
+    async (q: string, category: Category, deep: boolean) => {
+      const key = getDetailCacheKey(q, deep, category);
+      const cached = detailCacheRef.current.get(key);
+      if (cached) return cached;
+
+      const inFlight = detailInFlightRef.current.get(key);
+      if (inFlight) return inFlight;
+
+      const request = (async () => {
+        const detailUrl =
+          `/api/search/detail?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}` +
+          (deep ? "&deep=1" : "");
+        const res = await fetch(
+          detailUrl
+        );
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            data && typeof data.error === "string" ? data.error : "Search failed"
+          );
+        }
+
+        const data: { results: Result[] } = await res.json();
+        detailCacheRef.current.set(key, data.results);
+        return data.results;
+      })();
+
+      detailInFlightRef.current.set(key, request);
+      try {
+        return await request;
+      } finally {
+        detailInFlightRef.current.delete(key);
+      }
+    },
+    [getDetailCacheKey]
+  );
+
+  const fetchSimilarResults = useCallback(
+    async (q: string, category: Category, deep: boolean, sourceUrl: string) => {
+      const key = getSimilarCacheKey(q, deep, category, sourceUrl);
+      const cached = similarCacheRef.current.get(key);
+      if (cached) return cached;
+
+      const inFlight = similarInFlightRef.current.get(key);
+      if (inFlight) return inFlight;
+
+      const request = (async () => {
+        const similarUrl =
+          `/api/search/similar?url=${encodeURIComponent(sourceUrl)}&category=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}` +
+          (deep ? "&deep=1" : "");
+        const res = await fetch(similarUrl);
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            data && typeof data.error === "string"
+              ? data.error
+              : "Similar source search failed"
+          );
+        }
+
+        const data: { results: Result[] } = await res.json();
+        similarCacheRef.current.set(key, data.results);
+        return data.results;
+      })();
+
+      similarInFlightRef.current.set(key, request);
+      try {
+        return await request;
+      } finally {
+        similarInFlightRef.current.delete(key);
+      }
+    },
+    [getSimilarCacheKey]
+  );
 
   const search = useCallback(async () => {
     const q = query.trim();
@@ -467,9 +705,19 @@ export default function Home() {
     setError("");
     setResults(null);
     setLastSearchedQuery(q);
+    setLastSearchDeep(deepSearch);
     setActiveCategory(null);
     setDetailResults([]);
     setDetailError("");
+    activeDetailKeyRef.current = null;
+    setSimilarSource(null);
+    setSimilarResults([]);
+    setSimilarLoading(false);
+    setSimilarError("");
+    setExpandingSourceUrl(null);
+    activeSimilarKeyRef.current = null;
+    similarCacheRef.current = new Map();
+    similarInFlightRef.current = new Map();
 
     try {
       const res = await fetch("/api/search", {
@@ -494,29 +742,128 @@ export default function Home() {
     async (category: Category) => {
       if (!lastSearchedQuery) return;
 
+      const cacheKey = getDetailCacheKey(lastSearchedQuery, lastSearchDeep, category);
+      const cached = detailCacheRef.current.get(cacheKey);
       setActiveCategory(category);
-      setDetailLoading(true);
       setDetailError("");
+      activeDetailKeyRef.current = cacheKey;
+      setSimilarSource(null);
+      setSimilarResults([]);
+      setSimilarLoading(false);
+      setSimilarError("");
+      setExpandingSourceUrl(null);
+      activeSimilarKeyRef.current = null;
+
+      if (cached) {
+        setDetailResults(cached);
+        setDetailLoading(false);
+        return;
+      }
+
+      setDetailLoading(true);
       setDetailResults([]);
 
       try {
-        const res = await fetch(
-          `/api/search/detail?q=${encodeURIComponent(lastSearchedQuery)}&category=${encodeURIComponent(category)}`
-        );
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Search failed");
+        const data = await fetchDetailResults(lastSearchedQuery, category, lastSearchDeep);
+        if (activeDetailKeyRef.current === cacheKey) {
+          setDetailResults(data);
         }
-        const data: { results: Result[] } = await res.json();
-        setDetailResults(data.results);
       } catch (err) {
-        setDetailError(err instanceof Error ? err.message : "Search failed");
+        if (activeDetailKeyRef.current === cacheKey) {
+          setDetailError(err instanceof Error ? err.message : "Search failed");
+        }
       } finally {
-        setDetailLoading(false);
+        if (activeDetailKeyRef.current === cacheKey) {
+          setDetailLoading(false);
+        }
       }
     },
-    [lastSearchedQuery]
+    [fetchDetailResults, getDetailCacheKey, lastSearchedQuery, lastSearchDeep]
   );
+
+  const openSimilarFromSource = useCallback(
+    async (source: Result) => {
+      if (!source.url || !activeCategory || !lastSearchedQuery) return;
+
+      const cacheKey = getSimilarCacheKey(
+        lastSearchedQuery,
+        lastSearchDeep,
+        activeCategory,
+        source.url
+      );
+      const cached = similarCacheRef.current.get(cacheKey);
+
+      setSimilarSource(source);
+      setSimilarError("");
+      setExpandingSourceUrl(source.url);
+      activeSimilarKeyRef.current = cacheKey;
+
+      if (cached) {
+        setSimilarResults(cached);
+        setSimilarLoading(false);
+        setExpandingSourceUrl(null);
+        return;
+      }
+
+      setSimilarLoading(true);
+      setSimilarResults([]);
+
+      try {
+        const data = await fetchSimilarResults(
+          lastSearchedQuery,
+          activeCategory,
+          lastSearchDeep,
+          source.url
+        );
+        if (activeSimilarKeyRef.current === cacheKey) {
+          setSimilarResults(data);
+        }
+      } catch (err) {
+        if (activeSimilarKeyRef.current === cacheKey) {
+          setSimilarError(
+            err instanceof Error ? err.message : "Similar source search failed"
+          );
+        }
+      } finally {
+        if (activeSimilarKeyRef.current === cacheKey) {
+          setSimilarLoading(false);
+          setExpandingSourceUrl(null);
+        }
+      }
+    },
+    [
+      activeCategory,
+      fetchSimilarResults,
+      getSimilarCacheKey,
+      lastSearchedQuery,
+      lastSearchDeep,
+    ]
+  );
+
+  useEffect(() => {
+    if (!results || loading || !lastSearchedQuery) return;
+
+    const queryForPrefetch = lastSearchedQuery;
+    const deepForPrefetch = lastSearchDeep;
+
+    CATEGORIES.forEach((category) => {
+      const key = getDetailCacheKey(queryForPrefetch, deepForPrefetch, category);
+      if (detailCacheRef.current.has(key) || detailInFlightRef.current.has(key)) {
+        return;
+      }
+
+      fetchDetailResults(queryForPrefetch, category, deepForPrefetch).catch(() => {
+        // Silent prefetch failure: on-demand click path still handles errors visibly.
+      });
+    });
+  }, [
+    fetchDetailResults,
+    getDetailCacheKey,
+    lastSearchedQuery,
+    lastSearchDeep,
+    loading,
+    results,
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") search();
@@ -620,7 +967,16 @@ export default function Home() {
             <div>
               <button
                 type="button"
-                onClick={() => setActiveCategory(null)}
+                onClick={() => {
+                  activeDetailKeyRef.current = null;
+                  activeSimilarKeyRef.current = null;
+                  setSimilarSource(null);
+                  setSimilarResults([]);
+                  setSimilarLoading(false);
+                  setSimilarError("");
+                  setExpandingSourceUrl(null);
+                  setActiveCategory(null);
+                }}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
               >
                 <ArrowLeftIcon />
@@ -640,13 +996,68 @@ export default function Home() {
                 <p className="text-sm text-red-400 mb-6">{detailError}</p>
               )}
 
+              {similarSource && (
+                <div className="mb-6 border border-border rounded-none p-4 bg-card/50">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <h3 className="text-sm font-semibold font-mono">
+                        Similar Sources
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Expanded from: {similarSource.title}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        activeSimilarKeyRef.current = null;
+                        setSimilarSource(null);
+                        setSimilarResults([]);
+                        setSimilarLoading(false);
+                        setSimilarError("");
+                        setExpandingSourceUrl(null);
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  {similarError && (
+                    <p className="text-sm text-red-400 mb-3">{similarError}</p>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {similarLoading
+                      ? Array.from({ length: 4 }).map((_, i) => (
+                          <DetailSkeletonCard key={i} />
+                        ))
+                      : similarResults.map((r, i) => (
+                          <SimilarSourceCard key={i} r={r} />
+                        ))}
+                    {!similarLoading && similarResults.length === 0 && !similarError && (
+                      <p className="text-muted-foreground text-sm py-4 text-center">
+                        No similar sources found.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {detailLoading
                   ? Array.from({ length: 4 }).map((_, i) => (
                       <DetailSkeletonCard key={i} />
                     ))
                   : detailResults.map((r, i) => (
-                      <DetailCard key={i} r={r} category={activeCategory} />
+                      <DetailCard
+                        key={i}
+                        r={r}
+                        category={activeCategory}
+                        onExpandFromSource={openSimilarFromSource}
+                        isExpanding={similarLoading && expandingSourceUrl === r.url}
+                        isActiveSource={similarSource?.url === r.url}
+                      />
                     ))}
                 {!detailLoading && detailResults.length === 0 && !detailError && (
                   <p className="text-muted-foreground text-sm py-8 text-center">

@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const searchType = deep ? "deep" : "auto";
+    const searchType = deep === true ? "deep" : "auto";
 
     const [research, news, patents, companies] = await Promise.all([
       searchExa(query, "research", searchType),

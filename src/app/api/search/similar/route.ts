@@ -14,23 +14,10 @@ interface ExaResponse {
   results: ExaResult[];
 }
 
-const categoryConfigs: Record<
-  string,
-  { queryPrefix: string; type: string; category?: string; includeDomains?: string[] }
-> = {
-  research: {
-    queryPrefix: "academic research papers about",
-    type: "auto",
-    category: "research paper",
-  },
-  news: {
-    queryPrefix: "biotech pharma news clinical trials funding",
-    type: "auto",
-    category: "news",
-  },
+const categoryConfigs: Record<string, { includeDomains?: string[] }> = {
+  research: {},
+  news: {},
   patents: {
-    queryPrefix: "patent:",
-    type: "auto",
     includeDomains: [
       "patents.google.com",
       "patentscope.wipo.int",
@@ -40,23 +27,20 @@ const categoryConfigs: Record<
       "freepatentsonline.com",
     ],
   },
-  companies: {
-    queryPrefix: "biotech pharmaceutical company working on",
-    type: "auto",
-    category: "company",
-  },
+  companies: {},
 };
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get("q");
-  const category = searchParams.get("category");
+  const sourceUrl = searchParams.get("url");
+  const category = searchParams.get("category") || "";
   const deepParam = searchParams.get("deep");
+  const contextQuery = searchParams.get("q");
   const useDeepSearch = deepParam === "1";
 
-  if (!query || !category || !categoryConfigs[category]) {
+  if (!sourceUrl) {
     return NextResponse.json(
-      { error: "Valid query and category are required" },
+      { error: "Source URL is required" },
       { status: 400 }
     );
   }
@@ -69,31 +53,29 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const config = categoryConfigs[category];
+  const categoryConfig = categoryConfigs[category] ?? {};
 
   const body: Record<string, unknown> = {
-    query: `${config.queryPrefix} ${query}`,
-    numResults: 10,
-    type: useDeepSearch ? "deep" : config.type,
+    url: sourceUrl,
+    numResults: 8,
+    type: useDeepSearch ? "deep" : "auto",
     contents: {
-      text: { maxCharacters: 1500 },
+      text: { maxCharacters: 1200 },
       highlights: { numSentences: 1 },
       summary: {
-        query: `Summarize this source in 2-3 sentences related to: ${query}. Include one key takeaway.`,
+        query: contextQuery
+          ? `Summarize this source in 2-3 sentences in context of: ${contextQuery}. Include one key takeaway.`
+          : "Summarize this source in 2-3 sentences and include one key takeaway.",
       },
     },
   };
 
-  if (config.category) {
-    body.category = config.category;
-  }
-
-  if (config.includeDomains) {
-    body.includeDomains = config.includeDomains;
+  if (categoryConfig.includeDomains) {
+    body.includeDomains = categoryConfig.includeDomains;
   }
 
   try {
-    const res = await fetch("https://api.exa.ai/search", {
+    const res = await fetch("https://api.exa.ai/findSimilar", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -104,19 +86,20 @@ export async function GET(request: NextRequest) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error(`Exa API error for ${category}:`, errorText);
+      console.error("Exa findSimilar error:", errorText);
       return NextResponse.json(
-        { error: "Search failed" },
+        { error: "Similar source search failed" },
         { status: 502 }
       );
     }
 
     const data: ExaResponse = await res.json();
-    return NextResponse.json({ results: data.results });
+    const filtered = data.results.filter((r) => r.url !== sourceUrl);
+    return NextResponse.json({ results: filtered });
   } catch (error) {
-    console.error("Detail search error:", error);
+    console.error("Similar source error:", error);
     return NextResponse.json(
-      { error: "Search failed" },
+      { error: "Similar source search failed" },
       { status: 500 }
     );
   }
