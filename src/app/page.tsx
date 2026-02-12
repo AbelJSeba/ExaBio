@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Result {
@@ -308,14 +309,12 @@ function ResultPanel({
       <div className="flex items-center gap-2.5 px-5 h-[52px] border-b border-border shrink-0">
         <span className="text-primary">{icon}</span>
         {detailHref ? (
-          <a
+          <Link
             href={detailHref}
-            target="_blank"
-            rel="noopener noreferrer"
             className="text-[15px] font-semibold font-mono hover:text-primary transition-colors"
           >
             {title} &rarr;
-          </a>
+          </Link>
         ) : (
           <span className="text-[15px] font-semibold font-mono">{title}</span>
         )}

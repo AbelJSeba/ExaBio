@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 interface Result {
   title: string;
@@ -66,7 +66,7 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ReactNode }> = 
   companies: { label: "Companies", icon: <BuildingIcon /> },
 };
 
-function ExternalLinkIcon() {
+function ExternalLinkIcon({ className }: { className?: string }) {
   return (
     <svg
       width="14"
@@ -77,12 +77,50 @@ function ExternalLinkIcon() {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="shrink-0 text-muted-foreground"
+      className={className ?? "shrink-0"}
     >
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
       <polyline points="15 3 21 3 21 9" />
       <line x1="10" y1="14" x2="21" y2="3" />
     </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-border rounded hover:bg-secondary/50 transition-colors"
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+      {copied ? "Copied" : "Copy"}
+    </button>
   );
 }
 
@@ -127,19 +165,14 @@ function DetailCard({ r, category }: { r: Result; category: string }) {
 
   return (
     <div className="border border-border rounded-none p-6 hover:bg-secondary/30 transition-colors">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <a
-          href={r.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[15px] font-semibold font-mono leading-snug hover:text-primary transition-colors"
-        >
-          {r.title}
-        </a>
-        <a href={r.url} target="_blank" rel="noopener noreferrer" className="mt-1">
-          <ExternalLinkIcon />
-        </a>
-      </div>
+      <a
+        href={r.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[15px] font-semibold font-mono leading-snug hover:text-primary transition-colors block mb-2"
+      >
+        {r.title}
+      </a>
 
       <p className="text-xs text-muted-foreground mb-2">
         {source}
@@ -169,20 +202,28 @@ function DetailCard({ r, category }: { r: Result; category: string }) {
       )}
 
       {r.highlights && r.highlights.length > 0 && (
-        <div>
+        <div className="mb-4">
           <h3 className="text-xs font-semibold font-mono uppercase tracking-wider text-muted-foreground mb-2">
-            Key Takeaways
+            Key Takeaway
           </h3>
-          <ul className="space-y-1.5">
-            {r.highlights.map((h, i) => (
-              <li key={i} className="flex gap-2 text-sm leading-relaxed">
-                <span className="text-primary mt-0.5 shrink-0">&bull;</span>
-                <span className="text-foreground/90">{h}</span>
-              </li>
-            ))}
-          </ul>
+          <p className="text-sm leading-relaxed text-foreground/90">
+            {r.highlights[0]}
+          </p>
         </div>
       )}
+
+      <div className="flex items-center gap-2 pt-3 border-t border-border">
+        <CopyButton text={[r.title, summaryText, r.highlights?.[0]].filter(Boolean).join("\n\n")} />
+        <a
+          href={r.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground border border-border rounded hover:bg-secondary/50 transition-colors"
+        >
+          <ExternalLinkIcon />
+          Open source
+        </a>
+      </div>
     </div>
   );
 }
