@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import Link from "next/link";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 interface Result {
@@ -11,6 +10,7 @@ interface Result {
   author?: string;
   text?: string;
   highlights?: string[];
+  summary?: string;
 }
 
 interface SearchResults {
@@ -19,6 +19,8 @@ interface SearchResults {
   patents: Result[];
   companies: Result[];
 }
+
+type Category = keyof SearchResults;
 
 /* ─── Placeholder cycling ────────────────────────────────────── */
 const PLACEHOLDERS = [
@@ -128,6 +130,22 @@ function CrosshairIcon() {
     </svg>
   );
 }
+
+function ArrowLeftIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
+
+const CATEGORY_META: Record<Category, { label: string; icon: React.ReactNode }> = {
+  research: { label: "Research", icon: <BookOpenIcon /> },
+  news: { label: "Pipeline & News", icon: <NewspaperIcon /> },
+  patents: { label: "Patents", icon: <ShieldIcon /> },
+  companies: { label: "Companies", icon: <BuildingIcon /> },
+};
 
 /* ─── Skeleton loader ────────────────────────────────────────── */
 function SkeletonCard() {
@@ -290,31 +308,123 @@ function CompanyCard({ r }: { r: Result }) {
   );
 }
 
+function DetailSkeletonCard() {
+  return (
+    <div className="border border-border rounded-none p-6">
+      <div className="skeleton h-5 w-3/4 mb-3" />
+      <div className="skeleton h-3 w-1/3 mb-4" />
+      <div className="skeleton h-3 w-full mb-2" />
+      <div className="skeleton h-3 w-full mb-2" />
+      <div className="skeleton h-3 w-2/3 mb-4" />
+      <div className="skeleton h-4 w-1/4 mb-2" />
+      <div className="skeleton h-3 w-full mb-1" />
+      <div className="skeleton h-3 w-5/6" />
+    </div>
+  );
+}
+
+function getSourceDomain(url?: string) {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace("www.", "");
+  } catch {
+    return "";
+  }
+}
+
+function DetailCard({ r, category }: { r: Result; category: Category }) {
+  const source = getSourceDomain(r.url);
+  const date = r.publishedDate
+    ? new Date(r.publishedDate).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
+  const isPatent = category === "patents";
+  const patentOwner = isPatent ? getPatentOwner(r.author) : "";
+  const summaryText = r.summary || r.text;
+  const takeaway = r.highlights?.[0];
+
+  return (
+    <div className="border border-border rounded-none p-6 hover:bg-secondary/30 transition-colors">
+      <a
+        href={r.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[15px] font-semibold font-mono leading-snug hover:text-primary transition-colors block mb-2"
+      >
+        {r.title}
+      </a>
+
+      <p className="text-xs text-muted-foreground mb-2">
+        {source}
+        {date && <> &middot; {date}</>}
+      </p>
+
+      {isPatent && patentOwner && (
+        <p className="text-xs font-medium text-primary mb-3">
+          Owner: {patentOwner}
+        </p>
+      )}
+
+      {!isPatent && r.author && (
+        <p className="text-xs text-muted-foreground mb-3">
+          {r.author}
+        </p>
+      )}
+
+      {summaryText && (
+        <div className="mb-4">
+          <h3 className="text-xs font-semibold font-mono uppercase tracking-wider text-muted-foreground mb-2">
+            Summary
+          </h3>
+          <p className="text-sm leading-relaxed text-foreground/90">
+            {summaryText}
+          </p>
+        </div>
+      )}
+
+      {takeaway && (
+        <div className="mb-4">
+          <h3 className="text-xs font-semibold font-mono uppercase tracking-wider text-muted-foreground mb-2">
+            Takeaway
+          </h3>
+          <p className="text-sm leading-relaxed text-foreground/90">
+            {takeaway}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Result panel ───────────────────────────────────────────── */
 function ResultPanel({
   title,
   icon,
   results,
   CardComponent,
-  detailHref,
+  onOpenDetail,
 }: {
   title: string;
   icon: React.ReactNode;
   results: Result[];
   CardComponent: React.ComponentType<{ r: Result }>;
-  detailHref?: string;
+  onOpenDetail?: () => void;
 }) {
   return (
     <div className="bg-card border border-border rounded-none overflow-hidden flex flex-col shadow-sm shadow-black/5">
       <div className="flex items-center gap-2.5 px-5 h-[52px] border-b border-border shrink-0">
         <span className="text-primary">{icon}</span>
-        {detailHref ? (
-          <Link
-            href={detailHref}
+        {onOpenDetail ? (
+          <button
+            type="button"
+            onClick={onOpenDetail}
             className="text-[15px] font-semibold font-mono hover:text-primary transition-colors"
           >
             {title} &rarr;
-          </Link>
+          </button>
         ) : (
           <span className="text-[15px] font-semibold font-mono">{title}</span>
         )}
@@ -338,10 +448,15 @@ function ResultPanel({
 /* ─── Main page ──────────────────────────────────────────────── */
 export default function Home() {
   const [query, setQuery] = useState("");
+  const [lastSearchedQuery, setLastSearchedQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [deepSearch, setDeepSearch] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<Category | null>(null);
+  const [detailResults, setDetailResults] = useState<Result[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const placeholder = useCyclingPlaceholder();
 
@@ -351,6 +466,10 @@ export default function Home() {
     setLoading(true);
     setError("");
     setResults(null);
+    setLastSearchedQuery(q);
+    setActiveCategory(null);
+    setDetailResults([]);
+    setDetailError("");
 
     try {
       const res = await fetch("/api/search", {
@@ -371,6 +490,34 @@ export default function Home() {
     }
   }, [query, deepSearch]);
 
+  const openDetail = useCallback(
+    async (category: Category) => {
+      if (!lastSearchedQuery) return;
+
+      setActiveCategory(category);
+      setDetailLoading(true);
+      setDetailError("");
+      setDetailResults([]);
+
+      try {
+        const res = await fetch(
+          `/api/search/detail?q=${encodeURIComponent(lastSearchedQuery)}&category=${encodeURIComponent(category)}`
+        );
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Search failed");
+        }
+        const data: { results: Result[] } = await res.json();
+        setDetailResults(data.results);
+      } catch (err) {
+        setDetailError(err instanceof Error ? err.message : "Search failed");
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [lastSearchedQuery]
+  );
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") search();
     if (e.key === "Tab" && !query.trim()) {
@@ -384,6 +531,7 @@ export default function Home() {
   }, []);
 
   const showResults = results || loading;
+  const activeMeta = activeCategory ? CATEGORY_META[activeCategory] : null;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -465,10 +613,49 @@ export default function Home() {
         )}
       </section>
 
-      {/* Results grid */}
+      {/* Results */}
       {showResults && (
         <section className="flex-1 px-6 md:px-12 pb-12">
-          {loading ? (
+          {activeCategory && activeMeta ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+              >
+                <ArrowLeftIcon />
+                Back to overview
+              </button>
+
+              <div className="mb-1 flex items-center gap-2.5">
+                <span className="text-primary">{activeMeta.icon}</span>
+                <h2 className="text-2xl font-bold font-mono">{activeMeta.label}</h2>
+              </div>
+              <p className="text-sm text-muted-foreground mb-8">
+                Results for <span className="font-medium text-foreground">&ldquo;{lastSearchedQuery}&rdquo;</span>
+                {!detailLoading && <> &middot; {detailResults.length} sources</>}
+              </p>
+
+              {detailError && (
+                <p className="text-sm text-red-400 mb-6">{detailError}</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {detailLoading
+                  ? Array.from({ length: 4 }).map((_, i) => (
+                      <DetailSkeletonCard key={i} />
+                    ))
+                  : detailResults.map((r, i) => (
+                      <DetailCard key={i} r={r} category={activeCategory} />
+                    ))}
+                {!detailLoading && detailResults.length === 0 && !detailError && (
+                  <p className="text-muted-foreground text-sm py-8 text-center">
+                    No results found.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : loading ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-220px)]">
               <SkeletonPanel title="Research" icon={<BookOpenIcon />} />
               <SkeletonPanel title="Pipeline & News" icon={<NewspaperIcon />} />
@@ -483,28 +670,28 @@ export default function Home() {
                   icon={<BookOpenIcon />}
                   results={results.research}
                   CardComponent={ResearchCard}
-                  detailHref={`/results/research?q=${encodeURIComponent(query)}`}
+                  onOpenDetail={() => openDetail("research")}
                 />
                 <ResultPanel
                   title="Pipeline & News"
                   icon={<NewspaperIcon />}
                   results={results.news}
                   CardComponent={NewsCard}
-                  detailHref={`/results/news?q=${encodeURIComponent(query)}`}
+                  onOpenDetail={() => openDetail("news")}
                 />
                 <ResultPanel
                   title="Patents"
                   icon={<ShieldIcon />}
                   results={results.patents}
                   CardComponent={PatentCard}
-                  detailHref={`/results/patents?q=${encodeURIComponent(query)}`}
+                  onOpenDetail={() => openDetail("patents")}
                 />
                 <ResultPanel
                   title="Companies"
                   icon={<BuildingIcon />}
                   results={results.companies}
                   CardComponent={CompanyCard}
-                  detailHref={`/results/companies?q=${encodeURIComponent(query)}`}
+                  onOpenDetail={() => openDetail("companies")}
                 />
               </div>
             )

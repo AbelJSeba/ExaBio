@@ -75,8 +75,10 @@ export async function GET(request: NextRequest) {
     type: config.type,
     contents: {
       text: { maxCharacters: 1500 },
-      highlights: { numSentences: 3 },
-      summary: { query: `Summarize this source and its key findings related to: ${query}` },
+      highlights: { numSentences: 1 },
+      summary: {
+        query: `Summarize this source in 2-3 sentences related to: ${query}. Include one key takeaway.`,
+      },
     },
   };
 

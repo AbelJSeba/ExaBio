@@ -204,7 +204,7 @@ function DetailCard({ r, category }: { r: Result; category: string }) {
       {r.highlights && r.highlights.length > 0 && (
         <div className="mb-4">
           <h3 className="text-xs font-semibold font-mono uppercase tracking-wider text-muted-foreground mb-2">
-            Key Takeaway
+            Takeaway
           </h3>
           <p className="text-sm leading-relaxed text-foreground/90">
             {r.highlights[0]}
